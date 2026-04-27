@@ -7,20 +7,319 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #0f0f0f; }
+
     iframe {
       display: block;
       width: 100%;
       height: 100vh;
       border: none;
     }
+
+    #btn-raport {
+      position: fixed;
+      bottom: 16px;
+      right: 16px;
+      z-index: 999;
+      background: rgba(255,255,255,0.05);
+      color: rgba(255,255,255,0.25);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 5px;
+      padding: 5px 10px;
+      font-size: 10px;
+      font-family: system-ui, sans-serif;
+      letter-spacing: 0.08em;
+      cursor: pointer;
+      transition: all 0.25s;
+      user-select: none;
+    }
+    #btn-raport:hover {
+      background: rgba(255,255,255,0.12);
+      color: rgba(255,255,255,0.65);
+      border-color: rgba(255,255,255,0.18);
+    }
+
+    #modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      background: rgba(0,0,0,0.62);
+      backdrop-filter: blur(4px);
+      align-items: center;
+      justify-content: center;
+    }
+    #modal.open { display: flex; }
+
+    #modal-box {
+      background: #191919;
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 10px;
+      width: 500px;
+      max-width: 94vw;
+      padding: 22px 22px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      font-family: system-ui, sans-serif;
+      color: #d4d4d4;
+    }
+
+    #modal-box h3 {
+      font-size: 13px;
+      font-weight: 500;
+      color: #eee;
+      letter-spacing: 0.04em;
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .controls select,
+    .controls input {
+      flex: 1;
+      min-width: 130px;
+      background: #111;
+      border: 1px solid rgba(255,255,255,0.12);
+      color: #ccc;
+      border-radius: 5px;
+      padding: 6px 9px;
+      font-size: 12px;
+      outline: none;
+    }
+    .controls select:focus,
+    .controls input:focus { border-color: rgba(255,255,255,0.28); }
+
+    #output {
+      background: #111;
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 6px;
+      padding: 13px 15px;
+      font-size: 12.5px;
+      line-height: 1.8;
+      color: #bbb;
+      white-space: pre-wrap;
+      overflow-y: auto;
+      min-height: 90px;
+      max-height: 360px;
+    }
+    #output.loading { color: rgba(255,255,255,0.22); font-style: italic; }
+    #output.error   { color: #d97070; }
+
+    .modal-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    #status-msg {
+      font-size: 11px;
+      color: rgba(255,255,255,0.3);
+    }
+    .footer-btns { display: flex; gap: 8px; }
+    .footer-btns button {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.13);
+      color: rgba(255,255,255,0.55);
+      border-radius: 5px;
+      padding: 5px 15px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .footer-btns button:hover {
+      background: rgba(255,255,255,0.15);
+      color: rgba(255,255,255,0.9);
+    }
+    #btn-copy { background: rgba(255,255,255,0.11); }
   </style>
 </head>
 <body>
-  <!-- Wklej swój URL Apps Script poniżej (zastąp TWOJ_URL) -->
+
   <iframe
     src="https://script.google.com/macros/s/AKfycbySJWAzzqT9tbv8KphDxWa2bFuXUdkcum3ruFM2ZeA-EUYB3C19BHU0cT1Mk1Xq82I4Uw/exec"
     allow="fullscreen"
     loading="lazy"
   ></iframe>
+
+  <button id="btn-raport" onclick="openModal()">dostępność</button>
+
+  <div id="modal">
+    <div id="modal-box">
+      <h3>Raport dostępności sali</h3>
+
+      <div class="controls">
+        <select id="sel-sala" onchange="autoGenerate()">
+          <option value="">— wybierz salę —</option>
+          <option value="scena23">Scena 23</option>
+          <option value="baletowa">Baletowa (IV p. 90)</option>
+          <option value="galeria">Galeria 17</option>
+          <option value="gimnastyczna">Gimnastyczna (34)</option>
+          <option value="teatralna">Teatralna (p.78)</option>
+          <option value="plastyczna">Plastyczna (83/84)</option>
+        </select>
+        <input type="date" id="sel-week" onchange="autoGenerate()">
+      </div>
+
+      <div id="output">Wybierz salę i tydzień.</div>
+
+      <div class="modal-footer">
+        <span id="status-msg"></span>
+        <div class="footer-btns">
+          <button id="btn-copy" onclick="copyText()">Kopiuj</button>
+          <button onclick="closeModal()">Zamknij</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+const API    = 'https://script.google.com/macros/s/AKfycbySJWAzzqT9tbv8KphDxWa2bFuXUdkcum3ruFM2ZeA-EUYB3C19BHU0cT1Mk1Xq82I4Uw/exec';
+const GSTART = 8;
+const GEND   = 22;
+const BUFOR  = 0.5; // 30 minut w ułamku godziny
+const DNI    = ['Poniedziałek','Wtorek','Środa','Czwartek','Piątek','Sobota','Niedziela'];
+
+function getMondayStr() {
+  const now = new Date();
+  const d   = now.getDay();
+  const m   = new Date(now);
+  m.setDate(now.getDate() + (d === 0 ? -6 : 1 - d));
+  return m.toISOString().slice(0, 10);
+}
+
+document.getElementById('sel-week').value = getMondayStr();
+
+function openModal() {
+  document.getElementById('modal').classList.add('open');
+  autoGenerate();
+}
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+document.getElementById('modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal();
+});
+
+// Formatuje ułamek godziny → "HH:MM"
+function fmtH(h) {
+  const hh = Math.floor(h);
+  const mm = Math.round((h - hh) * 60);
+  return mm === 0 ? `${hh}:00` : `${hh}:${mm.toString().padStart(2, '0')}`;
+}
+
+// Oblicza wolne okna, uwzględniając bufor 30 min i pomijając okna < 30 min
+function freeSlots(busyRaw) {
+  const busy = busyRaw
+    .map(b => ({ s: Math.max(GSTART, b.s - BUFOR), e: Math.min(GEND, b.e + BUFOR) }))
+    .filter(b => b.s < b.e)
+    .sort((a, b) => a.s - b.s);
+
+  // Scala nakładające się przedziały
+  const merged = [];
+  for (const b of busy) {
+    if (merged.length && b.s <= merged.at(-1).e) {
+      merged.at(-1).e = Math.max(merged.at(-1).e, b.e);
+    } else {
+      merged.push({ ...b });
+    }
+  }
+
+  const free = [];
+  let cur = GSTART;
+  for (const b of merged) {
+    if (b.s - cur >= 0.5) free.push({ s: cur, e: b.s });
+    cur = Math.max(cur, b.e);
+  }
+  if (GEND - cur >= 0.5) free.push({ s: cur, e: GEND });
+  return free;
+}
+
+// Formatuje wolne okna w stylu "od godz. 8:00 do 12:00, a później od 14:30 do 22:00"
+function fmtFree(slots) {
+  if (!slots.length) return null;
+  return slots
+    .map((sl, i) => i === 0
+      ? `od godz. ${fmtH(sl.s)} do ${fmtH(sl.e)}`
+      : `a później od ${fmtH(sl.s)} do ${fmtH(sl.e)}`)
+    .join(', ');
+}
+
+let _debounce;
+function autoGenerate() {
+  clearTimeout(_debounce);
+  _debounce = setTimeout(generate, 180);
+}
+
+async function generate() {
+  const salaKey = document.getElementById('sel-sala').value;
+  const weekVal = document.getElementById('sel-week').value;
+  const out     = document.getElementById('output');
+
+  if (!salaKey || !weekVal) {
+    out.className   = '';
+    out.textContent = 'Wybierz salę i tydzień.';
+    return;
+  }
+
+  out.className   = 'loading';
+  out.textContent = 'Pobieranie danych…';
+  setStatus('');
+
+  try {
+    const res  = await fetch(`${API}?page=api&week=${weekVal}`);
+    const data = await res.json();
+
+    if (!data.ok) {
+      out.className   = 'error';
+      out.textContent = 'Błąd: ' + data.error;
+      return;
+    }
+
+    const monday = new Date(weekVal + 'T00:00:00');
+    const lines  = [];
+
+    for (let dow = 0; dow < 7; dow++) {
+      const date = new Date(monday);
+      date.setDate(monday.getDate() + dow);
+      const dd    = String(date.getDate()).padStart(2, '0');
+      const mm    = String(date.getMonth() + 1).padStart(2, '0');
+      const label = `${DNI[dow]} ${dd}.${mm}`;
+
+      const busy = data.zajetos[salaKey]?.[dow] ?? [];
+      const free = freeSlots(busy);
+      const fStr = fmtFree(free);
+
+      if (!fStr) {
+        lines.push(`${label} — brak wolnych godzin`);
+      } else if (!busy.length) {
+        lines.push(`${label} — cały dzień wolny`);
+      } else {
+        lines.push(`${label} — ${fStr}`);
+      }
+    }
+
+    out.className   = '';
+    out.textContent = lines.join('\n');
+    setStatus('wygenerowano ✓');
+
+  } catch (err) {
+    out.className   = 'error';
+    out.textContent = 'Błąd połączenia: ' + err.message;
+  }
+}
+
+function copyText() {
+  const text = document.getElementById('output').textContent;
+  if (!text || out.classList.contains('loading') || out.classList.contains('error')) return;
+  navigator.clipboard.writeText(text).then(() => setStatus('skopiowano ✓'));
+}
+
+function setStatus(msg) {
+  const el = document.getElementById('status-msg');
+  el.textContent = msg;
+  if (msg) setTimeout(() => { el.textContent = ''; }, 2500);
+}
+</script>
 </body>
 </html>
