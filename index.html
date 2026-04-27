@@ -208,7 +208,7 @@ function fmtH(h) {
   return mm === 0 ? `${hh}:00` : `${hh}:${mm.toString().padStart(2, '0')}`;
 }
 
-// Oblicza wolne okna, uwzględniając bufor 30 min i pomijając okna < 30 min
+// Oblicza wolne okna, uwzględniając bufor 30 min i pomijając okna < 1 godz.
 function freeSlots(busyRaw) {
   const busy = busyRaw
     .map(b => ({ s: Math.max(GSTART, b.s - BUFOR), e: Math.min(GEND, b.e + BUFOR) }))
@@ -228,10 +228,10 @@ function freeSlots(busyRaw) {
   const free = [];
   let cur = GSTART;
   for (const b of merged) {
-    if (b.s - cur >= 0.5) free.push({ s: cur, e: b.s });
+    if (b.s - cur >= 1) free.push({ s: cur, e: b.s });
     cur = Math.max(cur, b.e);
   }
-  if (GEND - cur >= 0.5) free.push({ s: cur, e: GEND });
+  if (GEND - cur >= 1) free.push({ s: cur, e: GEND });
   return free;
 }
 
